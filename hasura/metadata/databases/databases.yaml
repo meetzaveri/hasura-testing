@@ -1,0 +1,110 @@
+- name: default
+  kind: postgres
+  configuration:
+    connection_info:
+      database_url:
+        from_env: HGE_DATABASE_URL
+      isolation_level: read-committed
+      pool_settings:
+        connection_lifetime: 600
+        idle_timeout: 180
+        retries: 1
+      use_prepared_statements: true
+  health_check:
+    interval: 10
+    retries: 3
+    retry_interval: 5
+    test:
+      sql: SELECT 1
+    timeout: 5
+  logical_models:
+    - fields:
+        - name: title
+          type:
+            nullable: false
+            scalar: varchar
+        - name: qp_id
+          type:
+            nullable: false
+            scalar: uuid
+      name: episodes_logical_model
+    - fields:
+        - name: id
+          type:
+            nullable: false
+            scalar: uuid
+        - name: title
+          type:
+            nullable: false
+            scalar: varchar
+      name: get_episodes
+    - fields:
+        - name: talent_id
+          type:
+            nullable: false
+            scalar: uuid
+        - name: talent_name
+          type:
+            nullable: false
+            scalar: varchar
+        - name: podcast_id
+          type:
+            nullable: false
+            scalar: uuid
+        - name: podcast_title
+          type:
+            nullable: false
+            scalar: varchar
+        - name: episode_count
+          type:
+            nullable: false
+            scalar: bigint
+        - name: episodes
+          type:
+            nullable: false
+            scalar: jsonb
+      name: talent_podcast_episode
+    - fields:
+        - name: talent_id
+          type:
+            nullable: false
+            scalar: uuid
+        - name: talent_name
+          type:
+            nullable: false
+            scalar: varchar
+        - name: podcast_id
+          type:
+            nullable: false
+            scalar: uuid
+        - name: podcast_title
+          type:
+            nullable: false
+            scalar: varchar
+        - name: episode_count
+          type:
+            nullable: false
+            scalar: bigint
+      name: talent_podcast_lm
+  native_queries:
+    - arguments:
+        talent_qp_id:
+          description: ""
+          nullable: false
+          type: uuid
+      code: "SELECT \n    t.qp_id AS talent_id,\n    t.name AS talent_name,\n    p.qp_id AS podcast_id,\n    p.title AS podcast_title,\n    COUNT(e.qp_id) AS episode_count,\n    jsonb_agg(jsonb_build_object('title', e.title, 'id', e.qp_id) ORDER BY e.release_date) AS episodes\nFROM \n    talent t\nJOIN \n    podcast p ON t.qp_id = p.talent_id\nJOIN \n    episodes e ON p.qp_id = e.podcast_id\nWHERE \n    t.qp_id = {{talent_qp_id}}\nGROUP BY \n    t.qp_id, t.name, p.qp_id, p.title\nORDER BY \n    t.name, p.title;"
+      returns: talent_podcast_episode
+      root_field_name: Talent_podcast_episodes
+    - arguments: {}
+      code: "SELECT \n    title,\n    qp_id AS id\nFROM \n    episodes;"
+      returns: get_episodes
+      root_field_name: get_episodes
+    - arguments:
+        talent_qp_id:
+          description: ""
+          nullable: false
+          type: uuid
+      code: "SELECT \n    t.qp_id AS talent_id,\n    t.name AS talent_name,\n    p.qp_id AS podcast_id,\n    p.title AS podcast_title,\n    COUNT(e.qp_id) AS episode_count\nFROM \n    talent t\nJOIN \n    podcast p ON t.qp_id = p.talent_id\nJOIN \n    episodes e ON p.qp_id = e.podcast_id\nWHERE \n    t.qp_id = {{talent_qp_id}}\nGROUP BY \n    t.qp_id, t.name, p.qp_id, p.title\nORDER BY \n    t.name, p.title;"
+      returns: talent_podcast_lm
+      root_field_name: talent_podcast_nq
+  tables: "!include default/tables/tables.yaml"
